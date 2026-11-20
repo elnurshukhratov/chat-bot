@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: telegram-ai-userbot
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: TELEGRAM_SESSION
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: anthropic/claude-3.5-sonnet
+      - key: DATABASE_PATH
+        value: /var/data/database.sqlite3
+      - key: SESSION_PATH
+        value: /var/data/telegram.session
+      - key: LOG_LEVEL
+        value: INFO
+      - key: AI_TEMPERATURE
+        value: "0.7"
+      - key: AI_MAX_TOKENS
+        value: "500"
+      - key: CONVERSATION_HISTORY_LIMIT
+        value: "20"
+      - key: RESPONSE_COOLDOWN_SECONDS
+        value: "5"
+    disk:
+      name: userbot-data
+      mountPath: /var/data
+      sizeGB: 1
