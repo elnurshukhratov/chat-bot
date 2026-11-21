@@ -145,10 +145,11 @@ class MessageHandler:
                 self.config.conversation_history_limit
             )
 
-            formatted_messages = [
-                {'role': msg['role'], 'content': msg['content']}
-                for msg in history
-            ]
+            formatted_messages = self._build_context_aware_messages(
+                history,
+                message_text,
+                sender_username or f"User{event.sender_id}"
+            )
 
             async with self.processing_lock:
                 response = await self.openrouter.generate_response(formatted_messages)
@@ -174,6 +175,94 @@ class MessageHandler:
 
         except Exception as e:
             logger.error(f"Error handling message {event.id}: {e}", exc_info=True)
+
+    def _build_context_aware_messages(
+        self,
+        history: list,
+        current_message: str,
+        current_sender: str
+    ) -> list:
+        """
+        Build context-aware message list for AI with conversation understanding.
+
+        Args:
+            history: List of previous messages with sender info
+            current_message: The current incoming message text
+            current_sender: Username of current sender
+
+        Returns:
+            List of formatted messages for OpenRouter API
+        """
+        formatted_messages = []
+
+        if len(history) > 1:
+            context_summary = self._summarize_recent_context(history)
+            if context_summary:
+                formatted_messages.append({
+                    'role': 'system',
+                    'content': f"Recent conversation context: {context_summary}"
+                })
+
+        for msg in history:
+            content = msg['content']
+
+            if msg['role'] == 'user':
+                sender_label = msg.get('sender_username') or f"User{msg.get('sender_id', '')}"
+                formatted_messages.append({
+                    'role': 'user',
+                    'content': f"[{sender_label}]: {content}"
+                })
+            else:
+                formatted_messages.append({
+                    'role': 'assistant',
+                    'content': content
+                })
+
+        formatted_messages.append({
+            'role': 'user',
+            'content': f"[{current_sender}]: {current_message}"
+        })
+
+        return formatted_messages
+
+    def _summarize_recent_context(self, history: list) -> str:
+        """
+        Summarize recent conversation context to help AI understand the flow.
+
+        Args:
+            history: List of previous messages
+
+        Returns:
+            Context summary string or empty string
+        """
+        if len(history) < 2:
+            return ""
+
+        recent_messages = history[-5:] if len(history) > 5 else history
+
+        topics = []
+        has_questions = False
+        has_agreements = False
+
+        for msg in recent_messages:
+            content = msg['content'].lower()
+
+            if any(word in content for word in ['?', 'nima', 'qachon', 'qayer', 'kim', 'nega']):
+                has_questions = True
+
+            if any(word in content for word in ['ha', "yo'q", 'yaxshi', 'mayli', 'kelishdik', 'ok', "zo'r", 'rostan']):
+                has_agreements = True
+
+        context_parts = []
+        if has_questions:
+            context_parts.append("qoshimcha ma'lumot so'ralgan")
+        if has_agreements:
+            context_parts.append("kelishuvlar/tasdiqlar mavjud")
+
+        if context_parts:
+            return f"Suhbatda {', '.join(context_parts)}. Qisqa javoblarni suhbat kontekstida tushuning."
+
+        return "Davomiy suhbat. Oldingi xabarlarni hisobga oling."
 
     def _get_chat_type(self, chat) -> str:
         """

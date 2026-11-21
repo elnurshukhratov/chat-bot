@@ -182,18 +182,23 @@ class Database:
         limit: int = 20
     ) -> List[Dict[str, Any]]:
         """
-        Get recent conversation history.
+        Get recent conversation history with full context.
 
         Args:
             conversation_id: Database conversation ID
             limit: Maximum number of messages to retrieve
 
         Returns:
-            List of messages with role and content
+            List of messages with role, content, sender info and timestamps
         """
         cursor = await self.db.execute(
             """
-            SELECT role, content, created_at
+            SELECT
+                role,
+                content,
+                sender_id,
+                sender_username,
+                created_at
             FROM messages
             WHERE conversation_id = ?
             ORDER BY created_at DESC
@@ -207,6 +212,8 @@ class Database:
             {
                 'role': row['role'],
                 'content': row['content'],
+                'sender_id': row['sender_id'],
+                'sender_username': row['sender_username'],
                 'created_at': row['created_at']
             }
             for row in reversed(rows)
