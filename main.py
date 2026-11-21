@@ -4,6 +4,7 @@ import sys
 import signal
 import asyncio
 import os
+import time
 from aiohttp import web
 from config import config
 from database import Database
@@ -96,6 +97,9 @@ async def main():
     config.ensure_data_directories()
     logger.info("Data directories ready")
 
+    # Set start time for uptime tracking
+    config.start_time = time.time()
+
     # Start health server
     port = int(os.getenv('PORT', '10000'))
     health_app, health_runner, health_site = await start_health_server(port)
@@ -134,6 +138,7 @@ async def main():
     command_handler = CommandHandler(
         userbot=userbot,
         database=database,
+        openrouter_client=openrouter_client,
         config=config
     )
 

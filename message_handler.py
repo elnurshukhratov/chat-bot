@@ -41,8 +41,12 @@ class MessageHandler:
         Returns:
             Tuple of (should_respond, reason)
         """
+        # Check if message is a command (starts with /)
+        if event.raw_text and event.raw_text.strip().startswith('/'):
+            return False, "command message"
+
         if not self.config.ai_enabled:
-            return False, "AI disabled"
+            return False, "AI globally disabled"
 
         if event.out:
             return False, "outgoing message"
@@ -56,6 +60,14 @@ class MessageHandler:
         sender = await event.get_sender()
         if sender and getattr(sender, 'bot', False):
             return False, "sender is bot"
+
+        # Check per-chat AI settings
+        chat_settings = await self.database.get_chat_settings(event.chat_id)
+        if not chat_settings['ai_enabled']:
+            return False, "AI disabled for this chat"
+
+        if chat_settings['paused']:
+            return False, "AI paused for this chat"
 
         user_prefs = await self.database.get_user_preferences(event.sender_id)
         if user_prefs['blocklisted']:

@@ -43,6 +43,7 @@ class Config:
         self.log_level: str = os.getenv('LOG_LEVEL', 'INFO')
 
         self.ai_enabled: bool = True
+        self.start_time: float = 0.0
 
     def _get_int(self, key: str) -> Optional[int]:
         """Get integer value from environment variable."""

@@ -48,6 +48,20 @@ class Database:
         """)
 
         await self.db.execute("""
+            CREATE TABLE IF NOT EXISTS chat_settings (
+                chat_id INTEGER PRIMARY KEY,
+                ai_enabled BOOLEAN DEFAULT 1,
+                language TEXT DEFAULT NULL,
+                custom_prompt TEXT DEFAULT NULL,
+                temperature REAL DEFAULT NULL,
+                model TEXT DEFAULT NULL,
+                paused BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await self.db.execute("""
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 conversation_id INTEGER NOT NULL,
@@ -375,3 +389,270 @@ class Database:
             (key, value, value)
         )
         await self.db.commit()
+
+    async def get_chat_settings(self, chat_id: int) -> Dict[str, Any]:
+        """
+        Get chat-specific AI settings.
+
+        Args:
+            chat_id: Telegram chat ID
+
+        Returns:
+            Dictionary with chat settings
+        """
+        cursor = await self.db.execute(
+            "SELECT * FROM chat_settings WHERE chat_id = ?",
+            (chat_id,)
+        )
+        row = await cursor.fetchone()
+
+        if row:
+            return {
+                'ai_enabled': bool(row['ai_enabled']),
+                'language': row['language'],
+                'custom_prompt': row['custom_prompt'],
+                'temperature': row['temperature'],
+                'model': row['model'],
+                'paused': bool(row['paused'])
+            }
+
+        return {
+            'ai_enabled': True,
+            'language': None,
+            'custom_prompt': None,
+            'temperature': None,
+            'model': None,
+            'paused': False
+        }
+
+    async def set_chat_ai_enabled(self, chat_id: int, enabled: bool) -> None:
+        """
+        Enable or disable AI for a specific chat.
+
+        Args:
+            chat_id: Telegram chat ID
+            enabled: True to enable, False to disable
+        """
+        await self.db.execute(
+            """
+            INSERT INTO chat_settings (chat_id, ai_enabled)
+            VALUES (?, ?)
+            ON CONFLICT(chat_id) DO UPDATE SET
+                ai_enabled = ?,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (chat_id, int(enabled), int(enabled))
+        )
+        await self.db.commit()
+
+    async def set_chat_paused(self, chat_id: int, paused: bool) -> None:
+        """
+        Pause or resume AI for a specific chat.
+
+        Args:
+            chat_id: Telegram chat ID
+            paused: True to pause, False to resume
+        """
+        await self.db.execute(
+            """
+            INSERT INTO chat_settings (chat_id, paused)
+            VALUES (?, ?)
+            ON CONFLICT(chat_id) DO UPDATE SET
+                paused = ?,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (chat_id, int(paused), int(paused))
+        )
+        await self.db.commit()
+
+    async def set_chat_language(self, chat_id: int, language: Optional[str]) -> None:
+        """
+        Set language preference for a specific chat.
+
+        Args:
+            chat_id: Telegram chat ID
+            language: Language code (e.g., 'en', 'uz', 'ru') or None
+        """
+        await self.db.execute(
+            """
+            INSERT INTO chat_settings (chat_id, language)
+            VALUES (?, ?)
+            ON CONFLICT(chat_id) DO UPDATE SET
+                language = ?,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (chat_id, language, language)
+        )
+        await self.db.commit()
+
+    async def set_chat_model(self, chat_id: int, model: Optional[str]) -> None:
+        """
+        Set model preference for a specific chat.
+
+        Args:
+            chat_id: Telegram chat ID
+            model: Model identifier or None
+        """
+        await self.db.execute(
+            """
+            INSERT INTO chat_settings (chat_id, model)
+            VALUES (?, ?)
+            ON CONFLICT(chat_id) DO UPDATE SET
+                model = ?,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (chat_id, model, model)
+        )
+        await self.db.commit()
+
+    async def set_chat_temperature(self, chat_id: int, temperature: Optional[float]) -> None:
+        """
+        Set temperature preference for a specific chat.
+
+        Args:
+            chat_id: Telegram chat ID
+            temperature: Temperature value or None
+        """
+        await self.db.execute(
+            """
+            INSERT INTO chat_settings (chat_id, temperature)
+            VALUES (?, ?)
+            ON CONFLICT(chat_id) DO UPDATE SET
+                temperature = ?,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (chat_id, temperature, temperature)
+        )
+        await self.db.commit()
+
+    async def set_chat_prompt(self, chat_id: int, prompt: Optional[str]) -> None:
+        """
+        Set custom prompt for a specific chat.
+
+        Args:
+            chat_id: Telegram chat ID
+            prompt: Custom system prompt or None
+        """
+        await self.db.execute(
+            """
+            INSERT INTO chat_settings (chat_id, custom_prompt)
+            VALUES (?, ?)
+            ON CONFLICT(chat_id) DO UPDATE SET
+                custom_prompt = ?,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (chat_id, prompt, prompt)
+        )
+        await self.db.commit()
+
+    async def get_all_chat_settings(self) -> List[Dict[str, Any]]:
+        """
+        Get all chat settings.
+
+        Returns:
+            List of chat settings dictionaries
+        """
+        cursor = await self.db.execute(
+            "SELECT * FROM chat_settings ORDER BY chat_id"
+        )
+        rows = await cursor.fetchall()
+
+        return [
+            {
+                'chat_id': row['chat_id'],
+                'ai_enabled': bool(row['ai_enabled']),
+                'language': row['language'],
+                'custom_prompt': row['custom_prompt'],
+                'temperature': row['temperature'],
+                'model': row['model'],
+                'paused': bool(row['paused'])
+            }
+            for row in rows
+        ]
+
+    async def set_user_allowlist(self, user_id: int, allowed: bool) -> None:
+        """
+        Allow or deny a user.
+
+        Args:
+            user_id: Telegram user ID
+            allowed: True to allow, False to deny
+        """
+        await self.db.execute(
+            """
+            INSERT INTO user_preferences (user_id, allowlisted)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                allowlisted = ?,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (user_id, int(allowed), int(allowed))
+        )
+        await self.db.commit()
+
+    async def get_all_blocked_users(self) -> List[int]:
+        """
+        Get all blocked user IDs.
+
+        Returns:
+            List of blocked user IDs
+        """
+        cursor = await self.db.execute(
+            "SELECT user_id FROM user_preferences WHERE blocklisted = 1"
+        )
+        rows = await cursor.fetchall()
+        return [row['user_id'] for row in rows]
+
+    async def get_conversation_count(self) -> int:
+        """
+        Get total conversation count.
+
+        Returns:
+            Number of conversations
+        """
+        cursor = await self.db.execute(
+            "SELECT COUNT(*) as count FROM conversations"
+        )
+        row = await cursor.fetchone()
+        return row['count'] if row else 0
+
+    async def get_message_count(self) -> int:
+        """
+        Get total message count.
+
+        Returns:
+            Number of messages
+        """
+        cursor = await self.db.execute(
+            "SELECT COUNT(*) as count FROM messages"
+        )
+        row = await cursor.fetchone()
+        return row['count'] if row else 0
+
+    async def get_ai_message_count(self) -> int:
+        """
+        Get AI-generated message count.
+
+        Returns:
+            Number of AI messages
+        """
+        cursor = await self.db.execute(
+            "SELECT COUNT(*) as count FROM messages WHERE role = 'assistant'"
+        )
+        row = await cursor.fetchone()
+        return row['count'] if row else 0
+
+    async def clear_all_conversations(self) -> int:
+        """
+        Clear all conversation histories.
+
+        Returns:
+            Number of messages deleted
+        """
+        cursor = await self.db.execute("SELECT COUNT(*) as count FROM messages")
+        row = await cursor.fetchone()
+        count = row['count'] if row else 0
+
+        await self.db.execute("DELETE FROM messages")
+        await self.db.commit()
+        return count
