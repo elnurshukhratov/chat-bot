@@ -102,27 +102,27 @@ class CommandHandler:
         """
         client.add_event_handler(
             self.handle_ai_on,
-            NewMessage(pattern=r'^/ai_on$', outgoing=False)
+            NewMessage(pattern=r'^/ai_on$', outgoing=True)
         )
 
         client.add_event_handler(
             self.handle_ai_off,
-            NewMessage(pattern=r'^/ai_off$', outgoing=False)
+            NewMessage(pattern=r'^/ai_off$', outgoing=True)
         )
 
         client.add_event_handler(
             self.handle_status,
-            NewMessage(pattern=r'^/status$', outgoing=False)
+            NewMessage(pattern=r'^/status$', outgoing=True)
         )
 
         client.add_event_handler(
             self.handle_clear,
-            NewMessage(pattern=r'^/clear$', outgoing=False)
+            NewMessage(pattern=r'^/clear$', outgoing=True)
         )
 
         client.add_event_handler(
             self.handle_help,
-            NewMessage(pattern=r'^/help$', outgoing=False)
+            NewMessage(pattern=r'^/help$', outgoing=True)
         )
 
-        logger.info("Command handlers registered")
+        logger.info("Command handlers registered (outgoing=True for userbot)")
