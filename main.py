@@ -3,6 +3,8 @@
 import sys
 import signal
 import asyncio
+import os
+from aiohttp import web
 from config import config
 from database import Database
 from telegram_client import TelegramUserbot
@@ -14,7 +16,39 @@ from logging_config import setup_logging, get_logger
 logger = None
 
 
-async def shutdown(userbot, database, openrouter_client):
+async def health_check(request):
+    """Health check endpoint for Render."""
+    return web.json_response({
+        'status': 'ok',
+        'service': 'telegram-ai-userbot'
+    })
+
+
+async def start_health_server(port):
+    """
+    Start HTTP health check server.
+
+    Args:
+        port: Port number to bind to
+
+    Returns:
+        Tuple of (app, runner, site)
+    """
+    app = web.Application()
+    app.router.add_get('/health', health_check)
+    app.router.add_get('/', health_check)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+
+    logger.info(f"Health server listening on 0.0.0.0:{port}")
+    return app, runner, site
+
+
+async def shutdown(userbot, database, openrouter_client, health_runner=None):
     """
     Graceful shutdown handler.
 
@@ -22,8 +56,12 @@ async def shutdown(userbot, database, openrouter_client):
         userbot: TelegramUserbot instance
         database: Database instance
         openrouter_client: OpenRouterClient instance
+        health_runner: Health server runner instance
     """
     logger.info("Shutting down...")
+
+    if health_runner:
+        await health_runner.cleanup()
 
     if userbot:
         await userbot.stop()
@@ -58,6 +96,10 @@ async def main():
     config.ensure_data_directories()
     logger.info("Data directories ready")
 
+    # Start health server
+    port = int(os.getenv('PORT', '10000'))
+    health_app, health_runner, health_site = await start_health_server(port)
+
     database = Database(config.database_path)
     await database.connect()
 
@@ -69,6 +111,7 @@ async def main():
 
     if not await userbot.start():
         logger.error("Failed to start Telegram client. Exiting.")
+        await health_runner.cleanup()
         await database.close()
         sys.exit(1)
 
@@ -103,6 +146,7 @@ async def main():
     logger.info(f"Account: @{userbot.me.username} (ID: {userbot.me.id})")
     logger.info(f"AI Model: {config.openrouter_model}")
     logger.info(f"AI Status: {'Enabled' if config.ai_enabled else 'Disabled'}")
+    logger.info(f"Health Server: http://0.0.0.0:{port}/health")
     logger.info("=" * 60)
 
     shutdown_event = asyncio.Event()
@@ -117,7 +161,7 @@ async def main():
     try:
         await shutdown_event.wait()
     finally:
-        await shutdown(userbot, database, openrouter_client)
+        await shutdown(userbot, database, openrouter_client, health_runner)
 
 
 if __name__ == "__main__":
