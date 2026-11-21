@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 class CommandHandler:
     """Handle userbot commands with Uzbek responses."""
 
-    def __init__(self, userbot, database, openrouter_client, config):
+    def __init__(self, userbot, database, openrouter_client, config, monitor=None):
         """
         Initialize command handler.
 
@@ -23,11 +23,13 @@ class CommandHandler:
             database: Database instance
             openrouter_client: OpenRouterClient instance
             config: Config instance
+            monitor: HeartbeatMonitor instance (optional)
         """
         self.userbot = userbot
         self.database = database
         self.openrouter = openrouter_client
         self.config = config
+        self.monitor = monitor
         self.available_models = [
             "anthropic/claude-3.5-sonnet",
             "anthropic/claude-3-opus",
@@ -426,6 +428,48 @@ class CommandHandler:
         await event.reply(health)
         await self._delete_command_message(event)
 
+    async def handle_monitor_on(self, event: NewMessage.Event) -> None:
+        """Enable heartbeat monitoring."""
+        if not self.userbot.is_me(event.sender_id):
+            return
+
+        if not self.monitor:
+            await event.reply("❌ **Monitor moduli yuklanmagan**")
+            await self._delete_command_message(event)
+            return
+
+        result = await self.monitor.start_monitoring(event.chat_id)
+        await event.reply(result)
+        await self._delete_command_message(event)
+
+    async def handle_monitor_off(self, event: NewMessage.Event) -> None:
+        """Disable heartbeat monitoring."""
+        if not self.userbot.is_me(event.sender_id):
+            return
+
+        if not self.monitor:
+            await event.reply("❌ **Monitor moduli yuklanmagan**")
+            await self._delete_command_message(event)
+            return
+
+        result = await self.monitor.stop_monitoring()
+        await event.reply(result)
+        await self._delete_command_message(event)
+
+    async def handle_monitor_status(self, event: NewMessage.Event) -> None:
+        """Show monitoring status."""
+        if not self.userbot.is_me(event.sender_id):
+            return
+
+        if not self.monitor:
+            await event.reply("❌ **Monitor moduli yuklanmagan**")
+            await self._delete_command_message(event)
+            return
+
+        result = await self.monitor.get_status()
+        await event.reply(result)
+        await self._delete_command_message(event)
+
     # ========== AI TOOLS ==========
 
     async def handle_ask(self, event: NewMessage.Event) -> None:
@@ -505,7 +549,10 @@ class CommandHandler:
             "/stats - Statistika\n"
             "/uptime - Ishlash vaqti\n"
             "/ping - Ping test\n"
-            "/health - Tizim holati\n\n"
+            "/health - Tizim holati\n"
+            "/monitor_on - Monitor yoqish\n"
+            "/monitor_off - Monitor o'chirish\n"
+            "/monitor_status - Monitor holati\n\n"
             "**AI Vositalari:**\n"
             "/ask - AI ga savol\n"
             "/language - Til\n"
@@ -1000,6 +1047,9 @@ class CommandHandler:
         client.add_event_handler(self.handle_uptime, NewMessage(pattern=r'^/uptime$', outgoing=True))
         client.add_event_handler(self.handle_ping, NewMessage(pattern=r'^/ping$', outgoing=True))
         client.add_event_handler(self.handle_health, NewMessage(pattern=r'^/health$', outgoing=True))
+        client.add_event_handler(self.handle_monitor_on, NewMessage(pattern=r'^/monitor_on$', outgoing=True))
+        client.add_event_handler(self.handle_monitor_off, NewMessage(pattern=r'^/monitor_off$', outgoing=True))
+        client.add_event_handler(self.handle_monitor_status, NewMessage(pattern=r'^/monitor_status$', outgoing=True))
 
         # AI Tools
         client.add_event_handler(self.handle_ask, NewMessage(pattern=r'^/ask(\s|$)', outgoing=True))
@@ -1032,4 +1082,4 @@ class CommandHandler:
         # Help (must be last to allow /help command_name)
         client.add_event_handler(self.handle_help, NewMessage(pattern=r'^/help', outgoing=True))
 
-        logger.info("All V3 command handlers registered (49 total)")
+        logger.info("All V3 command handlers registered (52 total)")

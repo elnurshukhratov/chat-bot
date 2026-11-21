@@ -12,6 +12,7 @@ from telegram_client import TelegramUserbot
 from openrouter import OpenRouterClient
 from message_handler import MessageHandler
 from commands import CommandHandler
+from monitor import HeartbeatMonitor
 from logging_config import setup_logging, get_logger
 
 logger = None
@@ -49,7 +50,7 @@ async def start_health_server(port):
     return app, runner, site
 
 
-async def shutdown(userbot, database, openrouter_client, health_runner=None):
+async def shutdown(userbot, database, openrouter_client, health_runner=None, monitor=None):
     """
     Graceful shutdown handler.
 
@@ -58,8 +59,12 @@ async def shutdown(userbot, database, openrouter_client, health_runner=None):
         database: Database instance
         openrouter_client: OpenRouterClient instance
         health_runner: Health server runner instance
+        monitor: HeartbeatMonitor instance
     """
     logger.info("Shutting down...")
+
+    if monitor:
+        await monitor.stop_monitoring()
 
     if health_runner:
         await health_runner.cleanup()
@@ -128,6 +133,14 @@ async def main():
     )
     await openrouter_client.create_session()
 
+    # Initialize HeartbeatMonitor
+    monitor = HeartbeatMonitor(
+        userbot=userbot,
+        database=database,
+        config=config
+    )
+    await monitor.initialize()
+
     message_handler = MessageHandler(
         userbot=userbot,
         database=database,
@@ -139,12 +152,18 @@ async def main():
         userbot=userbot,
         database=database,
         openrouter_client=openrouter_client,
-        config=config
+        config=config,
+        monitor=monitor
     )
 
     client = userbot.get_client()
     message_handler.register_handler(client)
     command_handler.register_handlers(client)
+
+    # Start monitoring if it was previously enabled
+    if monitor.monitor_enabled and monitor.monitor_chat_id:
+        await monitor.start_monitoring(monitor.monitor_chat_id)
+        logger.info("Heartbeat monitoring resumed from previous session")
 
     logger.info("=" * 60)
     logger.info("Userbot is now running")
@@ -166,7 +185,7 @@ async def main():
     try:
         await shutdown_event.wait()
     finally:
-        await shutdown(userbot, database, openrouter_client, health_runner)
+        await shutdown(userbot, database, openrouter_client, health_runner, monitor)
 
 
 if __name__ == "__main__":
